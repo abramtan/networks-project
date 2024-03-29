@@ -7,14 +7,17 @@ import threading
 import time
 from datetime import datetime
 import config
+import argparse
 
 lbIP = config.hostIP
 lbPort = 60325
 headersize = 10
-QUERY_TIME = 2000 #How often to query server for performance in seconds
+QUERY_TIME = 10 #How often to query server for performance in seconds
 MSG_TIMEOUT = 3
 MAX_ATTEMPT = 5
 TEST_MODE = False
+
+rr_key = 1
 
 def serverReceive(client, echo = True, result = False):
     try:
@@ -58,7 +61,7 @@ def decisionTree(client, input):
                     clients[input['hostName']] = {'ip' : input['ip'], 'port' : input['port']}
                     lock.release()
                 elif input['hostType'] == 'server':
-                    servers[input['hostName']] = {'ip' : input['ip'], 'port' : input['port'],'perf' : sys.maxsize} #Set perf to max size so that no request will be forwarded to hosts that do not reply
+                    servers[input['hostName']] = {'ip' : input['ip'], 'port' : input['port'],'perf' : sys.maxsize, 'status' : True} #Set perf to max size so that no request will be forwarded to hosts that do not reply
                     lock.release()
                     if TEST_MODE:
                         testQueries(servers[input['hostName']])
@@ -75,9 +78,9 @@ def decisionTree(client, input):
                 if input['hostType'] == 'client':
                     print("Client made calcQuery")
                     #choose a server to forward query to and send
-                    ran = 0
                     tempClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    server = servers[[*servers][ran]]
+                    server = servers[select_mode()]
+                    print(server)
                     tempClient.connect((server['ip'], server['port']))
                     send(tempClient, input)
                     result = serverReceive(tempClient, False, True)
@@ -102,11 +105,12 @@ def queryTimer():
             serverDict = servers
             print("\n[queryTimer]Sending perfQuery to all servers")
             currentTime = QUERY_TIME
-            for server in serverDict.values():
+            for server in serverDict.keys():
                 try:
                     perfQueryTest = {'requestType' : 'perfQuery'}
-                    ackSend(server, perfQueryTest)
+                    ackSend(servers[server], perfQueryTest)
                 except Exception as e:
+                    servers[server]['status'] = False
                     print(f"[queryTimer]perfQuery failed: {e}")
             wait = False
     threading.Thread(target = queryTimer).start()
@@ -143,6 +147,79 @@ def testQueries(requester):
             break
         except Exception as e:
             print(f"[testQueries:TEST_MODE]:calcQuery failed: {e}")
+
+def select_mode():
+    global mode
+
+    match mode.upper():
+        case "POWER":
+            #print('POWER')
+            return power_distribution()
+        case "CONNECTIONS":
+            #print('CONNECTIONS')
+            return basic_round_robin()
+        case "RR":
+            #print('RR')
+            return basic_round_robin()
+        
+def basic_round_robin():
+    global servers
+    l = len(servers)
+
+    global rr_key
+
+    # Obtain server from server list
+    server = list(servers.keys())[rr_key-1]
+    
+    # Advance key
+    if rr_key < l:
+        rr_key += 1
+    else:
+        rr_key = 1
+
+    # Returns key of the server to be sent to
+    return server
+
+def power_distribution():
+    global servers
+    l = len(servers)
+
+    # Obtain power scores
+    power = {x:servers[x]["perf"] for x in servers}
+    lowest_power_server = None
+
+    # Find server with lowest power score, check if available, use next lowest if not and so on...
+    while power:
+        min_power = min(power, key=power.get)
+
+        # Dummy check if server is available
+        server_status = servers[min_power]["status"]
+
+        # Exit loop if server is available and set server, else remove server from power dictionary
+        if server_status:
+            lowest_power_server = min_power
+            break
+        else:
+            del power[min_power]
+
+    if lowest_power_server:
+        return lowest_power_server
+    else:
+        return None
+
+parser = argparse.ArgumentParser(description="Load Balancer")
+parser.add_argument("--mode", type=str, help="Mode of Load Balancer")
+args = parser.parse_args()
+if args.mode != None:
+    mode = args.mode
+elif args.mode != None and args.mode.upper() not in ['CONNECTIONS', 'POWER', 'RR']: 
+    print("Invalid arguments, exiting...")
+    sys.exit(130)
+else:
+    print("No arguments, exiting...")
+    sys.exit(130)
+
+mode = args.mode
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((lbIP, lbPort))

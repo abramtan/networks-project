@@ -12,8 +12,8 @@ import pandas as pd
 
 hostname = 'server_' + str(random.randint(0, 100))
 serverIP = config.hostIP
-serverPort = 60523
-#serverPort = random.randint(50000, 60000)
+#serverPort = 60523
+serverPort = random.randint(50000, 60000)
 lbIP = config.lbIP
 lbPort = 60325
 headersize = 10
@@ -65,7 +65,8 @@ def decisionTree(client, input):
         if input['requestType'] == 'perfQuery':
             print("Received perfQuery")
             #TODO Insert performance calculation method
-            pkgWatt, ramWatt = perfCommand()
+            #pkgWatt, ramWatt = perfCommand()
+            pkgWatt, ramWatt = perfCommandTEST()
             reply = {'requestType' : 'perfQuery',
                     'hostType' : 'server',
                     'hostName' : hostname,
@@ -105,6 +106,8 @@ def perfCommand():
         print("Failed perfCommand")
         return 0,0
     
+def perfCommandTEST():
+    return 0,0
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = random.randint(1,1000)
 perfStore = pd.DataFrame(columns = ['runInstance', 'time', 'onLoad', 'pkgWatt', 'ramWatt'])
