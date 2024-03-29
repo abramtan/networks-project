@@ -70,7 +70,7 @@ def decisionTree(client, input):
             reply = {'requestType' : 'perfQuery',
                     'hostType' : 'server',
                     'hostName' : hostname,
-                    'result' : {'pkgWatt' : pkgWatt, 'ramWatt' : ramWatt}
+                    'result' : pkgWatt + ramWatt
                     }
             print(f"Replying perfQuery with result: {pkgWatt}, {ramWatt}")
             send(client, reply)
@@ -101,13 +101,13 @@ def perfCommand():
         output = turbostat_output.split('\n')[1].split('\t')
         print("Success perfCommand")
         perfStore.loc[len(perfStore.index)] = [runInstance, time.ctime(time.time()), onLoad, output[0], output[1]]
-        return output[0], output[1] #PkgWatt, RAMWatt
+        return float(output[0]), float(output[1]) #PkgWatt, RAMWatt
     except:
         print("Failed perfCommand")
-        return 0,0
+        return 0.0,0.0
     
 def perfCommandTEST():
-    return 0,0
+    return random.randint(1,1000), random.randint(1,1000)
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = random.randint(1,1000)
 perfStore = pd.DataFrame(columns = ['runInstance', 'time', 'onLoad', 'pkgWatt', 'ramWatt'])

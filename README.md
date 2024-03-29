@@ -10,4 +10,4 @@ Currently tested for AWS Linux on EC2 instance
 3. Add your AWS CLI credentials inside the 'credentials' file
 4. In 'config.sh', modify the 'lb_instanceID' variable to contain the AWS instance ID of the load balancer EC2 instance.
 5. Run 'sudo bash config.sh'
-6. Depending on whether or not the instance is meant to be a load balancer or a server, run 'python3.12 lb.py' or 'python3.12 server.py'
+6. Depending on whether or not the instance is meant to be a load balancer or a server, run 'python lb.py --mode [rr/connections/power]' or 'python3.12 server.py'
