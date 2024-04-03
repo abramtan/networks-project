@@ -6,6 +6,13 @@ import threading
 import time
 from datetime import datetime
 import config
+import tqdm
+from pprint import pprint
+
+# TODO Number of uploads, how many times to upload the .mp4
+
+filename = "BigBuckBunny-short.mp4"
+no_of_uploads = 3  # How many times to upload the video
 
 clientName = 'clientTest'
 serverIP = config.hostIP
@@ -21,7 +28,7 @@ def receive(client):
     try:
         data = b''
         msglen = int(client.recv(headersize))
-        #print(f"new msg len {msglen}")
+        # print(f"new msg len {msglen}")
         while True:
             if len(data) >= msglen:
                 break
@@ -33,11 +40,15 @@ def receive(client):
                 else:
                     data += client.recv(remMsgLen)
         input = pickle.loads(data)
-        print(f'Received {input}')
+        # print(f'Received {input}')
 
-        if input['hostType'] == 'server':
-            client.close()
-            sys.exit(130)
+        return input
+
+        # if input['requestType'] == 'getServer':
+        #     return input  # server['ip'], server['port']
+        # elif input['hostType'] == 'server':
+        #     client.close()
+        #     sys.exit(130)
     except Exception as e:
         print(f"Problem reading message: {e}")
     finally:
@@ -49,24 +60,67 @@ def send(client, obj):
     #print(msg)
     client.send(msg)
 
+def upload_video(host, port, filename):
+    SEPARATOR = "<SEPARATOR>"
+    BUFFER_SIZE = 4096 # send 4096 bytes each time step
+
+    # get the file size
+    filesize = os.path.getsize(filename)
+
+    # create the client socket
+    s = socket.socket()
+
+    print(f"[+] Connecting to {host}:{port}")
+    s.connect((host, port))
+    print("[+] Connected.")
+
+    # send the filename and filesize
+    s.send(f"{filename}{SEPARATOR}{filesize}".encode())
+
+    # start sending the file
+    progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+    with open(filename, "rb") as f:
+        while True:
+            # read the bytes from the file
+            bytes_read = f.read(BUFFER_SIZE)
+            if not bytes_read:
+                # file transmitting is done
+                break
+            # we use sendall to assure transimission in 
+            # busy networks
+            s.sendall(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
+    # close the socket
+    s.close()
+
+
+
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 #client.settimeout(5)
 client.connect((lbIP, lbPort))
 
 try:
-    query = {'requestType' : 'calcQuery',
-                 'hostType' : 'client', 
-                 'hostName' : clientName,
-                 'ip' : serverIP}
+    query = {'requestType' : 'getServer',
+                'hostType' : 'client', 
+                'hostName' : clientName,
+                'ip' : serverIP}
+    
     send(client, query)
-            #print('Waiting for connection...')
-            #client, addr = client.accept()
-    while True:
+
+    result = None
+
+    while result == None:
         try:
-            receive(client)
+            result = receive(client)
             time.sleep(3)
         except socket.timeout:
             pass
+
+    pprint(result)
+
+    upload_video(result['ip'], 5001, filename)
+
 except KeyboardInterrupt:
     print("Terminating...")
     try:
