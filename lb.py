@@ -37,7 +37,8 @@ def serverReceive(client, echo = True, result = False):
         input = pickle.loads(data)
         #print(f'Received {input}'
         if echo:
-            send(client, input)
+            pass
+            # send(client, input)
         if result:
             return input
         decisionTree(client, input)
@@ -47,7 +48,7 @@ def serverReceive(client, echo = True, result = False):
 def send(client, obj):
     msg = pickle.dumps(obj)
     msg = bytes(f'{len(msg) :< {headersize}}', 'utf-8') + msg
-    #print(msg)
+    # print(msg)
     client.send(msg)
 
 def decisionTree(client, input):
@@ -89,6 +90,16 @@ def decisionTree(client, input):
                 if input['hostName'] in servers.keys():
                     print(f"[decisionTree]Received calcQuery reply from {input['hostName']} with value of {input['result']}")
                     #TODO: Add in algorithm thing
+                    send(client, input)
+            # Received query for available server IP, port from client
+            elif input['requestType'] == 'getServer':
+                if input['hostType'] == 'client':
+                    print("Client made getServer query")
+                    #choose a server to forward query to and send
+                    result = servers[select_mode()]
+                    # result['requestType'] = 'getServer'
+                    input.update(result)
+                    print(input)  # server['ip'], server['port']
                     send(client, input)
         finally:
             pass
