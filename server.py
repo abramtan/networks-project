@@ -8,19 +8,28 @@ import time
 import config
 import subprocess
 import pandas as pd
-
+import tqdm
+import ffmpeg_streaming
+from ffmpeg_streaming import Formats
+import datetime
+import boto3
+from pprint import pprint
 
 hostname = 'server_' + str(random.randint(0, 100))
 serverIP = config.hostIP
 #serverPort = 60523
 serverPort = random.randint(50000, 60000)
-lbIP = config.lbIP
+lbIP = config.hostIP
 lbPort = 60325
 headersize = 10
 connected = False #Do not set to True
 onLoad = False
 MSG_TIMEOUT = 3
 MAX_ATTEMPT = 5
+SERVER_HOST = serverIP
+SERVER_PORT = 5001
+BUFFER_SIZE = 4096
+SEPARATOR = "<SEPARATOR>"
 
 def save_string_to_file(text, filename):
     file = open(filename, 'w')
@@ -52,6 +61,98 @@ def receive(client, addr):
         print(f"Problem reading message: {e}")
     finally:
         pass
+
+def receiveVideo(client_upload_video, address):
+    print(f"{addr} is uploading a video...")
+
+    # receive the file infos
+    # receive using client socket, not server socket
+    received = client_upload_video.recv(BUFFER_SIZE).decode()
+    filename, filesize = received.split(SEPARATOR)
+    # remove absolute path if there is
+    filename = os.path.basename(filename)
+    # convert to integer
+    filesize = int(filesize)
+
+    # start receiving the file from the socket
+    # and writing to the file stream
+    progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+    
+    # Timestamp the uploaded video file
+    t = time.localtime()
+    current_time = time.strftime("%d_%H_%M_%S", t)
+    save_video_filepath = './media/originals/' + filename[:-4] + '_' + current_time + '.mp4'
+    print(save_video_filepath)
+
+    os.makedirs(os.path.dirname(save_video_filepath), exist_ok=True)
+    
+    with open(save_video_filepath, "wb") as f:
+        while True:
+            # read 1024 bytes from the socket (receive)
+            bytes_read = client_upload_video.recv(BUFFER_SIZE)
+            if not bytes_read:    
+                # nothing is received
+                # file transmitting is done
+                break
+            # write to the file the bytes we just received
+            f.write(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
+    
+    client_upload_video.close()
+    save_hls_filepath = transcode(filename, current_time)
+    print(save_hls_filepath)
+    print(type(current_time))
+    print(filename)
+    uploadS3(save_hls_filepath[:25], current_time, filename)
+
+def transcode(filename, current_time):
+    video = ffmpeg_streaming.input(filename)
+
+    def monitor(ffmpeg, duration, time_, time_left, process):
+        per = round(time_ / duration * 100)
+        sys.stdout.write(
+            "\rTranscoding...(%s%%) %s left [%s%s]" %
+            (per, datetime.timedelta(seconds=int(time_left)), '#' * per, '-' * (100 - per))
+        )
+        sys.stdout.flush()
+
+    save_hls_filepath = './media/dash/' + current_time + '/' + filename[:-4] + '.m3u8'
+
+    hls = video.hls(Formats.h264())
+    hls.auto_generate_representations([240, 144])
+    hls.output(save_hls_filepath, monitor=monitor)
+
+    return save_hls_filepath
+
+def uploadS3(save_hls_filepath, current_time, file_name):
+    local_directory = save_hls_filepath
+    bucket = 'networks-project-s3-bucket'
+    destination = current_time
+
+    print(local_directory, destination)
+    print('\n')
+
+    client = boto3.client('s3')
+
+    for root, dirs, files in os.walk(local_directory):
+
+        for filename in files:
+
+            local_path = os.path.join(root, filename)
+            relative_path = os.path.relpath(local_path, local_directory)
+            s3_path = os.path.join(destination, relative_path)
+
+            print('Searching "%s" in "%s"' % (s3_path, bucket))
+            try:
+                response = client.head_object(Bucket=bucket, Key=s3_path)
+                print("Path found on S3! Skipping %s..." % s3_path)
+            except:
+                print("Uploading %s..." % s3_path)
+                response = client.upload_file(local_path, bucket, s3_path, ExtraArgs={'ACL':'public-read'})
+            pprint(response)
+
+    print(f'Done uploading. Access video here: https://networks-project-s3-bucket.s3.amazonaws.com/{destination}/{file_name[:-4]}.m3u8')
 
 def send(client, obj):
     msg = pickle.dumps(obj)
@@ -131,6 +232,8 @@ while connected == False:
         pass
 print("Connected to LB\n=================================")
 
+lbIP, lbPort = client.getpeername()
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((serverIP, serverPort))
 server.listen()
@@ -139,18 +242,29 @@ server.settimeout(1)
 print(f"Created listening socket {serverIP}:{serverPort}")
 #Listen to request
 
+# Opening port for video upload
+s = socket.socket()
+s.bind((SERVER_HOST, SERVER_PORT))
+s.listen()
+# print(f"[*] Listening as {SERVER_HOST}:{SERVER_PORT}")
+
 try:
     while True:
         try:
-            #print('Waiting for connection...')
+            # For accepting messages
             client, addr = server.accept()
             threading.Thread(target = receive, args = (client, addr)).start()
+            
+            # For receiving videos
+            client_upload_video, address = s.accept() 
+            threading.Thread(target = receiveVideo, args = (client_upload_video, address)).start()
         except socket.timeout:
             pass
 except KeyboardInterrupt:
     print("Terminating...")
     try:
         server.close()
+        s.close()
         perfStore.to_csv(f'perfData{runInstance}.csv')
         sys.exit(130)
     except SystemExit:
