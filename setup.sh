@@ -24,3 +24,4 @@ curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 sudo python3.12 get-pip.py
 pip3.12 --version
 sudo apt install linux-tools-aws
+pip install python-ffmpeg-video-streaming
