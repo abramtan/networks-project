@@ -71,6 +71,7 @@ def decisionTree(client, input):
             elif input['requestType'] == 'perfQuery':
                 if input['hostName'] in servers.keys():
                     print(f"[decisionTree]Received perfQuery reply from {input['hostName']} with value of {input['result']}")
+                    print(f'Action Connections: {input['activeConnections']}')
                     lock.acquire()
                     servers[input['hostName']]['perf'] = input['result']
                     lock.release()
