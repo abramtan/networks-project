@@ -30,6 +30,12 @@ SERVER_HOST = serverIP
 SERVER_PORT = 5001
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
+activeConnections = 0
+lock = threading.Lock()
+
+# def receiveVideoHandler(s):
+#     client_upload_video, address = s.accept()
+#     receiveVideo(client_upload_video, address)
 
 def save_string_to_file(text, filename):
     file = open(filename, 'w')
@@ -63,7 +69,13 @@ def receive(client, addr):
         pass
 
 def receiveVideo(client_upload_video, address):
-    print(f"{addr} is uploading a video...")
+    global activeConnections
+    print(f'Starting receiveVideo. Active connections: {activeConnections}')
+    lock.acquire()
+    activeConnections += 1
+    lock.release()
+
+    print(f"{address} is uploading a video...")
 
     # receive the file infos
     # receive using client socket, not server socket
@@ -105,6 +117,11 @@ def receiveVideo(client_upload_video, address):
     print(type(current_time))
     print(filename)
     uploadS3(save_hls_filepath[:25], current_time, filename)
+
+    lock.acquire()
+    if activeConnections > 0:
+        activeConnections -= 1
+    lock.release()
 
 def transcode(filename, current_time):
     video = ffmpeg_streaming.input(filename)
@@ -167,11 +184,12 @@ def decisionTree(client, input):
             print("Received perfQuery")
             #TODO Insert performance calculation method
             #pkgWatt, ramWatt = perfCommand()
-            pkgWatt, ramWatt = perfCommandTEST()
+            pkgWatt, ramWatt = perfCommand()
             reply = {'requestType' : 'perfQuery',
                     'hostType' : 'server',
                     'hostName' : hostname,
-                    'result' : pkgWatt + ramWatt
+                    'result' : pkgWatt + ramWatt,
+                    'activeConnections' : activeConnections
                     }
             print(f"Replying perfQuery with result: {pkgWatt}, {ramWatt}")
             send(client, reply)
@@ -234,13 +252,13 @@ print("Connected to LB\n=================================")
 
 lbIP, lbPort = client.getpeername()
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((serverIP, serverPort))
-server.listen()
-server.setblocking(False)
-server.settimeout(1)
-print(f"Created listening socket {serverIP}:{serverPort}")
-#Listen to request
+# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# server.bind((serverIP, serverPort))
+# server.listen()
+# server.setblocking(False)
+# server.settimeout(1)
+# print(f"Created listening socket {serverIP}:{serverPort}")
+# #Listen to request
 
 # Opening port for video upload
 s = socket.socket()
@@ -248,13 +266,28 @@ s.bind((SERVER_HOST, SERVER_PORT))
 s.listen()
 # print(f"[*] Listening as {SERVER_HOST}:{SERVER_PORT}")
 
+def lbPort():
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind((serverIP, serverPort))
+        server.listen()
+        server.setblocking(False)
+        server.settimeout(1)
+        print(f"Created listening socket {serverIP}:{serverPort}")
+        while True:
+            try:
+                client, addr = server.accept()
+                print("reading...")
+                threading.Thread(target = receive, args = (client, addr)).start()
+            except socket.timeout:
+                pass
+    finally:
+        server.close()
+
 try:
+    threading.Thread(target = lbPort, args = ()).start()
     while True:
         try:
-            # For accepting messages
-            client, addr = server.accept()
-            threading.Thread(target = receive, args = (client, addr)).start()
-            
             # For receiving videos
             client_upload_video, address = s.accept() 
             threading.Thread(target = receiveVideo, args = (client_upload_video, address)).start()
@@ -263,7 +296,6 @@ try:
 except KeyboardInterrupt:
     print("Terminating...")
     try:
-        server.close()
         s.close()
         perfStore.to_csv(f'perfData{runInstance}.csv')
         sys.exit(130)
