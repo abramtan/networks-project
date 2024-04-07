@@ -62,7 +62,7 @@ def decisionTree(client, input):
                     clients[input['hostName']] = {'ip' : input['ip'], 'port' : input['port']}
                     lock.release()
                 elif input['hostType'] == 'server':
-                    servers[input['hostName']] = {'ip' : input['ip'], 'port' : input['port'],'perf' : sys.maxsize, 'status' : True} #Set perf to max size so that no request will be forwarded to hosts that do not reply
+                    servers[input['hostName']] = {'ip' : input['ip'], 'port' : input['port'],'perf' : sys.maxsize, 'activeConnections' : 0,'status' : True} #Set perf to max size so that no request will be forwarded to hosts that do not reply
                     lock.release()
                     if TEST_MODE:
                         testQueries(servers[input['hostName']])
@@ -74,6 +74,7 @@ def decisionTree(client, input):
                     print(f'Action Connections: {input['activeConnections']}')
                     lock.acquire()
                     servers[input['hostName']]['perf'] = input['result']
+                    servers[input['hostName']]['activeConnections'] = input['activeConnections']
                     lock.release()
                     send(client, input)
             elif input['requestType'] == 'calcQuery':
@@ -169,7 +170,7 @@ def select_mode():
             return power_distribution()
         case "CONNECTIONS":
             #print('CONNECTIONS')
-            return basic_round_robin()
+            return least_connections()
         case "RR":
             #print('RR')
             return basic_round_robin()
@@ -191,6 +192,35 @@ def basic_round_robin():
 
     # Returns key of the server to be sent to
     return server
+
+def least_connections():
+    global servers
+    l = len(servers)
+    
+    # Obtain connections list
+    connections = {x:servers[x]["activeConnections"] for x in servers}
+    lowest_connections_server = None
+
+    # Find server with lowest active connections, check if available, use next lowest if not and so on...
+    while connections:
+        number_connections = {x:len(connections[x]) for x in connections}
+        min_connections = min(number_connections, key=number_connections.get)
+
+        # Dummy check if server is available
+        server_status = servers[min_connections]["status"]
+
+        # Exit loop if server is available and set server, else remove server from connections dictionary
+        if server_status:
+            lowest_connections_server = min_connections
+            break
+        else:
+            del connections[min_connections]
+
+    if lowest_connections_server:
+        return lowest_connections_server
+    else:
+        return None
+
 
 def power_distribution():
     global servers
