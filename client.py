@@ -96,35 +96,43 @@ def upload_video(host, port, filename):
 
 
 
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#client.settimeout(5)
-client.connect((lbIP, lbPort))
 
-try:
-    query = {'requestType' : 'getServer',
-                'hostType' : 'client', 
-                'hostName' : clientName,
-                'ip' : serverIP}
-    
-    send(client, query)
 
-    result = None
 
-    while result == None:
-        try:
-            result = receive(client)
-            time.sleep(3)
-        except socket.timeout:
-            pass
+queries = 10
+queryGap = 30
 
-    pprint(result)
-
-    upload_video(result['ip'], 5001, filename)
-
-except KeyboardInterrupt:
-    print("Terminating...")
+for i in range(queries):
     try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #client.settimeout(5)
+        client.connect((lbIP, lbPort))
+        query = {'requestType' : 'getServer',
+                    'hostType' : 'client', 
+                    'hostName' : clientName,
+                    'ip' : serverIP}
+        
+        send(client, query)
+
+        result = None
+
+        while result == None:
+            try:
+                result = receive(client)
+                time.sleep(3)
+            except socket.timeout:
+                pass
+
+        print(result)
+
+        upload_video(result['ip'], 5001, filename)
+        print("Sleeping...")
+        time.sleep(queryGap)
         client.close()
-        sys.exit(130)
-    except SystemExit:
-        os._exit(130)
+    except KeyboardInterrupt:
+        print("Terminating...")
+        try:
+            client.close()
+            sys.exit(130)
+        except SystemExit:
+            os._exit(130)

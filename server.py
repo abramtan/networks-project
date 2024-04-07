@@ -73,55 +73,57 @@ def receiveVideo(client_upload_video, address):
     print(f'Starting receiveVideo. Active connections: {activeConnections}')
     lock.acquire()
     activeConnections += 1
+    onLoad = True
     lock.release()
+    try:
+        print(f"{address} is uploading a video...")
 
-    print(f"{address} is uploading a video...")
+        # receive the file infos
+        # receive using client socket, not server socket
+        received = client_upload_video.recv(BUFFER_SIZE).decode()
+        filename, filesize = received.split(SEPARATOR)
+        # remove absolute path if there is
+        filename = os.path.basename(filename)
+        # convert to integer
+        filesize = int(filesize)
 
-    # receive the file infos
-    # receive using client socket, not server socket
-    received = client_upload_video.recv(BUFFER_SIZE).decode()
-    filename, filesize = received.split(SEPARATOR)
-    # remove absolute path if there is
-    filename = os.path.basename(filename)
-    # convert to integer
-    filesize = int(filesize)
+        # start receiving the file from the socket
+        # and writing to the file stream
+        progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+        
+        # Timestamp the uploaded video file
+        t = time.localtime()
+        current_time = time.strftime("%d_%H_%M_%S", t)
+        save_video_filepath = './media/originals/' + filename[:-4] + '_' + current_time + '.mp4'
+        print(save_video_filepath)
 
-    # start receiving the file from the socket
-    # and writing to the file stream
-    progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
-    
-    # Timestamp the uploaded video file
-    t = time.localtime()
-    current_time = time.strftime("%d_%H_%M_%S", t)
-    save_video_filepath = './media/originals/' + filename[:-4] + '_' + current_time + '.mp4'
-    print(save_video_filepath)
-
-    os.makedirs(os.path.dirname(save_video_filepath), exist_ok=True)
-    
-    with open(save_video_filepath, "wb") as f:
-        while True:
-            # read 1024 bytes from the socket (receive)
-            bytes_read = client_upload_video.recv(BUFFER_SIZE)
-            if not bytes_read:    
-                # nothing is received
-                # file transmitting is done
-                break
-            # write to the file the bytes we just received
-            f.write(bytes_read)
-            # update the progress bar
-            progress.update(len(bytes_read))
-    
-    client_upload_video.close()
-    save_hls_filepath = transcode(filename, current_time)
-    print(save_hls_filepath)
-    print(type(current_time))
-    print(filename)
-    uploadS3(save_hls_filepath[:25], current_time, filename)
-
-    lock.acquire()
-    if activeConnections > 0:
-        activeConnections -= 1
-    lock.release()
+        os.makedirs(os.path.dirname(save_video_filepath), exist_ok=True)
+        
+        with open(save_video_filepath, "wb") as f:
+            while True:
+                # read 1024 bytes from the socket (receive)
+                bytes_read = client_upload_video.recv(BUFFER_SIZE)
+                if not bytes_read:    
+                    # nothing is received
+                    # file transmitting is done
+                    break
+                # write to the file the bytes we just received
+                f.write(bytes_read)
+                # update the progress bar
+                progress.update(len(bytes_read))
+        
+        client_upload_video.close()
+        save_hls_filepath = transcode(filename, current_time)
+        print(save_hls_filepath)
+        print(type(current_time))
+        print(filename)
+        uploadS3(save_hls_filepath[:25], current_time, filename)
+    finally:
+        lock.acquire()
+        if activeConnections > 0:
+            activeConnections -= 1
+        onLoad = False
+        lock.release()
 
 def transcode(filename, current_time):
     video = ffmpeg_streaming.input(filename)
