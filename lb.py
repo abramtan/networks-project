@@ -174,6 +174,8 @@ def select_mode():
         case "RR":
             #print('RR')
             return basic_round_robin()
+        case "IC":
+            return improved_connections()
         
 def basic_round_robin():
     global servers
@@ -248,13 +250,78 @@ def power_distribution():
         return lowest_power_server
     else:
         return None
+    
+def least_connections():
+    global servers
+    l = len(servers)
+    
+    # Obtain connections list
+    connections = {x:servers[x]["active_connections"] for x in servers}
+    lowest_connections_server = None
+
+    # Find server with lowest active connections, check if available, use next lowest if not and so on...
+    while connections:
+        min_connections = min(connections, key=connections.get)
+
+        # Dummy check if server is available
+        server_status = servers[min_connections]["status"]
+
+        # Exit loop if server is available and set server, else remove server from connections dictionary
+        if server_status:
+            lowest_connections_server = min_connections
+            break
+        else:
+            del connections[min_connections]
+
+    if lowest_connections_server:
+        return lowest_connections_server
+    else:
+        return None
+
+def improved_connections():
+    global servers
+    l = len(servers)
+
+    # Obtain connections list
+    connections = {x:servers[x]["active_connections"] for x in servers}
+
+    # Find list of connections with lowest active connections
+    lowest_value = min(connections.values())
+    lowest_connections = {}
+
+    for key in connections:
+        if connections[key] == lowest_value and servers[key]["status"]:
+            lowest_connections[key] = connections[key]
+
+    # Obtain power scores
+    power = {x:servers[x]["perf"] for x in lowest_connections}
+    lowest_power_server = None
+
+    # Find server with lowest power score, check if available, use next lowest if not and so on...
+    while power:
+        min_power = min(power, key=power.get)
+
+        # Dummy check if server is available
+        server_status = servers[min_power]["status"]
+
+        # Exit loop if server is available and set server, else remove server from power dictionary
+        if server_status:
+            lowest_power_server = min_power
+            break
+        else:
+            del power[min_power]
+
+    if lowest_power_server:
+        return lowest_power_server
+    else:
+        return None
 
 parser = argparse.ArgumentParser(description="Load Balancer")
 parser.add_argument("--mode", type=str, help="Mode of Load Balancer")
 args = parser.parse_args()
 if args.mode != None:
     mode = args.mode
-elif args.mode != None and args.mode.upper() not in ['CONNECTIONS', 'POWER', 'RR']: 
+elif args.mode != None and args.mode.upper() not in ['CONNECTIONS', 'POWER', 'RR', 'IC']: 
     print("Invalid arguments, exiting...")
     sys.exit(130)
 else:
