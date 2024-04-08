@@ -72,8 +72,8 @@ def receive(client, addr):
 def receiveVideo(client_upload_video, address):
     global activeConnections, jobCount
     state = "Success"
-    print(f'Starting receiveVideo. Active connections: {activeConnections}')
     lock.acquire()
+    print(f'Starting receiveVideo. Active connections: {activeConnections}')
     activeConnections += 1
     onLoad = True
     jobNo = jobCount
@@ -122,7 +122,7 @@ def receiveVideo(client_upload_video, address):
         print(type(current_time))
         print(filename)
         #uploadS3(save_hls_filepath[:25], current_time, filename)
-    except:
+    except Exception as e:
         state = 'Fail'
     finally:
         lock.acquire()
@@ -195,18 +195,19 @@ def decisionTree(client, input):
             #TODO Insert performance calculation method
             #pkgWatt, ramWatt = perfCommand()
             pkgWatt, ramWatt = perfCommand()
+            lock.acquire()
             reply = {'requestType' : 'perfQuery',
                     'hostType' : 'server',
                     'hostName' : hostname,
                     'result' : pkgWatt + ramWatt,
                     'activeConnections' : activeConnections
                     }
+            lock.release()
             print(f"Replying perfQuery with result: {pkgWatt}, {ramWatt}")
             send(client, reply)
         elif input['requestType'] == 'calcQuery':
             print("Received calcQuery")
             onLoad = True
-            #TODO Calculate
             result = random.randint(0, 1000)
             reply = {'requestType' : 'calcQuery',
                     'hostType' : 'server',
@@ -222,9 +223,10 @@ def decisionTree(client, input):
         pass
 
 def perfCommand():
-    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", "10", "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
+    turboInterval = 5
+    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", turboInterval, "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
     output = subprocess.run(turbostat_command, capture_output=True, text=True)
-    time.sleep(1)
+    time.sleep(turboInterval + 1)
     turbostat_output = output.stdout
     try:
         output = turbostat_output.split('\n')[1].split('\t')
