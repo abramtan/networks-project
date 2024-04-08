@@ -31,6 +31,7 @@ SERVER_PORT = 5001
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
 activeConnections = 0
+jobCount = 0
 lock = threading.Lock()
 
 # def receiveVideoHandler(s):
@@ -74,6 +75,8 @@ def receiveVideo(client_upload_video, address):
     lock.acquire()
     activeConnections += 1
     onLoad = True
+    jobNo = jobCount
+    jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start"]
     lock.release()
     try:
         print(f"{address} is uploading a video...")
@@ -117,11 +120,13 @@ def receiveVideo(client_upload_video, address):
         print(save_hls_filepath)
         print(type(current_time))
         print(filename)
-        uploadS3(save_hls_filepath[:25], current_time, filename)
+        #uploadS3(save_hls_filepath[:25], current_time, filename)
     finally:
         lock.acquire()
         if activeConnections > 0:
             activeConnections -= 1
+        jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "End"]
+        jobCount +=1
         onLoad = False
         lock.release()
 
@@ -214,14 +219,14 @@ def decisionTree(client, input):
         pass
 
 def perfCommand():
-    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", "1", "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
+    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", "10", "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
     output = subprocess.run(turbostat_command, capture_output=True, text=True)
     time.sleep(1)
     turbostat_output = output.stdout
     try:
         output = turbostat_output.split('\n')[1].split('\t')
         print("Success perfCommand")
-        perfStore.loc[len(perfStore.index)] = [runInstance, time.ctime(time.time()), onLoad, output[0], output[1]]
+        perfStore.loc[len(perfStore.index)] = [time.ctime(time.time()), onLoad, output[0], output[1]]
         return float(output[0]), float(output[1]) #PkgWatt, RAMWatt
     except:
         print("Failed perfCommand")
@@ -230,8 +235,9 @@ def perfCommand():
 def perfCommandTEST():
     return random.randint(1,1000), random.randint(1,1000)
 #-------------------------------------------------------------------------------------------------------------------------------------------------
-runInstance = random.randint(1,1000)
-perfStore = pd.DataFrame(columns = ['runInstance', 'time', 'onLoad', 'pkgWatt', 'ramWatt'])
+runInstance = time.ctime(time.time())
+perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])
+jobStore = pd.DataFrame(columns = ['jobNo', 'time', 'State'])
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.settimeout(5)
 #Attempt to connect to LB
@@ -299,7 +305,8 @@ except KeyboardInterrupt:
     print("Terminating...")
     try:
         s.close()
-        perfStore.to_csv(f'perfData{runInstance}.csv')
+        perfStore.to_csv(f'{runInstance}-perfData.csv')
+        jobStore.to_csv(f'{runInstance}-jobData.csv')
         sys.exit(130)
     except SystemExit:
         os._exit(130)
