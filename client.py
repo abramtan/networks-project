@@ -69,40 +69,45 @@ def upload_video(host, port, filename):
 
     # create the client socket
     s = socket.socket()
+    try:
+        print(f"[+] Connecting to {host}:{port}")
+        s.connect((host, port))
+        print("[+] Connected.")
 
-    print(f"[+] Connecting to {host}:{port}")
-    s.connect((host, port))
-    print("[+] Connected.")
+        # send the filename and filesize
+        s.send(f"{filename}{SEPARATOR}{filesize}".encode())
 
-    # send the filename and filesize
-    s.send(f"{filename}{SEPARATOR}{filesize}".encode())
-
-    # start sending the file
-    progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
-    with open(filename, "rb") as f:
-        while True:
-            # read the bytes from the file
-            bytes_read = f.read(BUFFER_SIZE)
-            if not bytes_read:
-                # file transmitting is done
-                break
-            # we use sendall to assure transimission in 
-            # busy networks
-            s.sendall(bytes_read)
-            # update the progress bar
-            progress.update(len(bytes_read))
+        # start sending the file
+        progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+        with open(filename, "rb") as f:
+            while True:
+                # read the bytes from the file
+                bytes_read = f.read(BUFFER_SIZE)
+                if not bytes_read:
+                    # file transmitting is done
+                    break
+                # we use sendall to assure transimission in 
+                # busy networks
+                s.sendall(bytes_read)
+                # update the progress bar
+                progress.update(len(bytes_read))
+    except Exception as e:
+        print(e)
     # close the socket
-    s.close()
+    finally:
+        s.close()
 
 
 
 
 
 
-queries = 10
+queries = 2
 queryGap = 30
+fullDuration = 20 #Trial length in minutes
+iterTimes = fullDuration * 60 / queryGap
 
-for i in range(queries):
+for i in range(int(iterTimes)):
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #client.settimeout(5)
@@ -122,13 +127,17 @@ for i in range(queries):
                 time.sleep(3)
             except socket.timeout:
                 pass
-
-        print(result)
-
-        upload_video(result['ip'], 5001, filename)
-        print("Sleeping...")
-        time.sleep(queryGap)
         client.close()
+
+        print("Sending to:", result)
+
+        #upload_video(result['ip'], 5001, filename)
+        for i in range(queries):
+            threading.Thread(target = upload_video, args = (result['ip'], 5001, filename)).start()
+            time.sleep(3)
+        print(f"Query {i} started, sleeping...")
+        time.sleep(queryGap)
+        
     except KeyboardInterrupt:
         print("Terminating...")
         try:

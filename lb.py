@@ -110,23 +110,25 @@ def queryTimer():
     global servers
     waiting = True
     currentTime = QUERY_TIME
-    while waiting:
-        if currentTime > 0:
-            time.sleep(1)
-            currentTime -= 1
-        else:
-            serverDict = servers
-            print("\n[queryTimer]Sending perfQuery to all servers")
-            currentTime = QUERY_TIME
-            for server in serverDict.keys():
-                try:
-                    perfQueryTest = {'requestType' : 'perfQuery'}
-                    ackSend(servers[server], perfQueryTest)
-                except Exception as e:
-                    servers[server]['status'] = False
-                    print(f"[queryTimer]perfQuery failed: {e}")
-            wait = False
-    threading.Thread(target = queryTimer).start()
+    try:
+        while waiting:
+            if currentTime > 0:
+                time.sleep(1)
+                currentTime -= 1
+            else:
+                serverDict = servers
+                print("\n[queryTimer]Sending perfQuery to all servers")
+                currentTime = QUERY_TIME
+                for server in serverDict.keys():
+                    try:
+                        perfQueryTest = {'requestType' : 'perfQuery'}
+                        ackSend(servers[server], perfQueryTest)
+                    except Exception as e:
+                        servers[server]['status'] = False
+                        print(f"[queryTimer]perfQuery failed: {e}")
+                wait = False
+    finally:
+        threading.Thread(target = queryTimer).start()
 
 def ackSend(server, obj):
     tempClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -70,13 +70,14 @@ def receive(client, addr):
         pass
 
 def receiveVideo(client_upload_video, address):
-    global activeConnections
+    global activeConnections, jobCount
+    state = "Success"
     print(f'Starting receiveVideo. Active connections: {activeConnections}')
     lock.acquire()
     activeConnections += 1
     onLoad = True
     jobNo = jobCount
-    jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start"]
+    jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start", '-']
     lock.release()
     try:
         print(f"{address} is uploading a video...")
@@ -121,11 +122,13 @@ def receiveVideo(client_upload_video, address):
         print(type(current_time))
         print(filename)
         #uploadS3(save_hls_filepath[:25], current_time, filename)
+    except:
+        state = 'Fail'
     finally:
         lock.acquire()
         if activeConnections > 0:
             activeConnections -= 1
-        jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "End"]
+        jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "End", state]
         jobCount +=1
         onLoad = False
         lock.release()
@@ -237,7 +240,7 @@ def perfCommandTEST():
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = time.ctime(time.time())
 perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])
-jobStore = pd.DataFrame(columns = ['jobNo', 'time', 'State'])
+jobStore = pd.DataFrame(columns = ['jobNo', 'time', 'State', 'Success'])
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.settimeout(5)
 #Attempt to connect to LB
