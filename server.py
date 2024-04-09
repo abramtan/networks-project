@@ -15,6 +15,7 @@ import datetime
 import boto3
 from pprint import pprint
 
+wattMultiplier = 120
 hostname = 'server_' + str(random.randint(0, 100))
 serverIP = config.hostIP
 #serverPort = 60523
@@ -76,8 +77,9 @@ def receiveVideo(client_upload_video, address):
     print(f'Starting receiveVideo. Active connections: {activeConnections}')
     activeConnections += 1
     onLoad = True
-    jobNo = jobCount
+    jobNo = random.randint(1,1000)
     jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start", '-']
+    print(f"# of active connections: {activeConnections}")
     lock.release()
     try:
         print(f"{address} is uploading a video...")
@@ -118,12 +120,16 @@ def receiveVideo(client_upload_video, address):
         
         client_upload_video.close()
         save_hls_filepath = transcode(filename, current_time)
-        print(save_hls_filepath)
+        os.remove(save_video_filepath)
+        #print(save_hls_filepath)
         print(type(current_time))
-        print(filename)
+        #print(filename)
         #uploadS3(save_hls_filepath[:25], current_time, filename)
     except Exception as e:
+        t = time.localtime()
+        current_time = time.strftime("%d_%H_%M_%S", t)
         state = 'Fail'
+        save_hls_filepath = transcode("BigBuckBunny-short.mp4", current_time)
     finally:
         lock.acquire()
         if activeConnections > 0:
@@ -131,11 +137,13 @@ def receiveVideo(client_upload_video, address):
         jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "End", state]
         jobCount +=1
         onLoad = False
+        print(f"Request Complete with status {state}")
+        print(f"# of active connections: {activeConnections}")
         lock.release()
 
 def transcode(filename, current_time):
     video = ffmpeg_streaming.input(filename)
-
+    print("Transcoding...")
     def monitor(ffmpeg, duration, time_, time_left, process):
         per = round(time_ / duration * 100)
         sys.stdout.write(
@@ -147,8 +155,9 @@ def transcode(filename, current_time):
     save_hls_filepath = './media/dash/' + current_time + '/' + filename[:-4] + '.m3u8'
 
     hls = video.hls(Formats.h264())
-    hls.auto_generate_representations([240, 144])
+    hls.auto_generate_representations([640, 480])
     hls.output(save_hls_filepath, monitor=monitor)
+    os.remove(save_hls_filepath)
 
     return save_hls_filepath
 
@@ -189,41 +198,33 @@ def send(client, obj):
 
 #Handles request
 def decisionTree(client, input):
+    global activeConnections
     try:
         if input['requestType'] == 'perfQuery':
             print("Received perfQuery")
-            #TODO Insert performance calculation method
-            #pkgWatt, ramWatt = perfCommand()
-            pkgWatt, ramWatt = perfCommand()
+            pkgWatt, ramWatt = perfCommandTEST()
+            #pkgWatt, ramWatt = 0,0 
             lock.acquire()
+            wattSum = "" + str(pkgWatt + ramWatt)
+            #connections = "" + str(activeConnections)
             reply = {'requestType' : 'perfQuery',
-                    'hostType' : 'server',
-                    'hostName' : hostname,
-                    'result' : pkgWatt + ramWatt,
-                    'activeConnections' : activeConnections
-                    }
+                     'hostType' : 'server',
+                     'hostName' : hostname,
+                      'result' : wattSum,
+                      'activeConnections' : str(activeConnections)
+            }
             lock.release()
-            print(f"Replying perfQuery with result: {pkgWatt}, {ramWatt}")
+            
+            print(f"Replying perfQuery with result: {pkgWatt+ramWatt}, connections= {activeConnections}")
             send(client, reply)
-        elif input['requestType'] == 'calcQuery':
-            print("Received calcQuery")
-            onLoad = True
-            result = random.randint(0, 1000)
-            reply = {'requestType' : 'calcQuery',
-                    'hostType' : 'server',
-                    'hostName' : hostname,
-                    'result' : result
-                    }
-            print(f"Replying calcQuery with result: {result}")
-            send(client, reply)
-            onLoad = False
     except Exception as e:
+        send(client, reply)
         print(f'Thread encountered problem: {e}')
     finally:
         pass
 
 def perfCommand():
-    turboInterval = 5
+    turboInterval = 1
     turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", turboInterval, "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
     output = subprocess.run(turbostat_command, capture_output=True, text=True)
     time.sleep(turboInterval + 1)
@@ -238,7 +239,18 @@ def perfCommand():
         return 0.0,0.0
     
 def perfCommandTEST():
-    return random.randint(1,1000), random.randint(1,1000)
+    lock.acquire()
+    count = activeConnections
+    lock.release()
+    offset = random.randint(-20, 20)
+    if count < 4:
+        calc = wattMultiplier * 0.3 * count + offset
+        if calc < 0:
+            return 0
+        else:
+            return wattMultiplier * 0.3 * count + offset, 0
+    else:
+        return wattMultiplier
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = time.ctime(time.time())
 perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])

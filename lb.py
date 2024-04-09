@@ -12,7 +12,7 @@ import argparse
 lbIP = config.hostIP
 lbPort = 60325
 headersize = 10
-QUERY_TIME = 10 #How often to query server for performance in seconds
+QUERY_TIME = 15 #How often to query server for performance in seconds
 MSG_TIMEOUT = 3
 MAX_ATTEMPT = 5
 TEST_MODE = False
@@ -96,12 +96,12 @@ def decisionTree(client, input):
             # Received query for available server IP, port from client
             elif input['requestType'] == 'getServer':
                 if input['hostType'] == 'client':
-                    print("Client made getServer query")
                     #choose a server to forward query to and send
                     result = servers[select_mode()]
                     # result['requestType'] = 'getServer'
                     input.update(result)
-                    print(input)  # server['ip'], server['port']
+                    print(f"Client made getServer query: {input["ip"]}, Connections {input["activeConnections"]}")
+                    #print(input)  # server['ip'], server['port']
                     send(client, input)
         finally:
             pass
@@ -349,7 +349,7 @@ try:
         try:
             #print('Waiting for connection...')
             client, addr = server.accept()
-            print('Connected')
+            #print('Connected')
             threading.Thread(target = serverReceive, args = (client, True, False)).start()
         except socket.timeout:
             pass

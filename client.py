@@ -9,7 +9,10 @@ import config
 import tqdm
 from pprint import pprint
 
-# TODO Number of uploads, how many times to upload the .mp4
+queries = 3 #Number of queries per iteration
+queryGap = 30 #Rest duration between each iteration
+fullDuration = 20 #Trial length in minutes
+
 
 filename = "BigBuckBunny-short.mp4"
 no_of_uploads = 3  # How many times to upload the video
@@ -102,11 +105,9 @@ def upload_video(host, port, filename):
 
 
 
-queries = 2
-queryGap = 30
-fullDuration = 20 #Trial length in minutes
-iterTimes = fullDuration * 60 / queryGap
 
+iterTimes = fullDuration * 60 / queryGap
+startTime = time.ctime(time.time())
 for i in range(int(iterTimes)):
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -132,12 +133,11 @@ for i in range(int(iterTimes)):
         print("Sending to:", result)
 
         #upload_video(result['ip'], 5001, filename)
-        for i in range(queries):
+        for j in range(queries):
             threading.Thread(target = upload_video, args = (result['ip'], 5001, filename)).start()
             time.sleep(3)
         print(f"Query {i} started, sleeping...")
-        time.sleep(queryGap)
-        
+        time.sleep(queryGap-queries*3)
     except KeyboardInterrupt:
         print("Terminating...")
         try:
@@ -145,3 +145,5 @@ for i in range(int(iterTimes)):
             sys.exit(130)
         except SystemExit:
             os._exit(130)
+print(f"Start time: {startTime}")
+print(f"End time: {time.ctime(time.time())}")
