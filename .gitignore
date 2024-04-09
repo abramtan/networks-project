@@ -152,5 +152,3 @@ cython_debug/
 #.idea/
 /dash
 .DS_Store
-credentials
-config.py

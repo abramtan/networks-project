@@ -1,7 +1,6 @@
 #!/bin/bash
 
 sudo yum update -y
-mkdir .aws
 
 cd /usr/local/bin
 sudo mkdir ffmpeg
