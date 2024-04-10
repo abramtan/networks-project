@@ -15,7 +15,7 @@ import datetime
 import boto3
 from pprint import pprint
 
-wattMultiplier = 120
+wattMultiplier = 140
 hostname = 'server_' + str(random.randint(0, 100))
 serverIP = config.hostIP
 #serverPort = 60523
@@ -76,11 +76,19 @@ def receiveVideo(client_upload_video, address):
     lock.acquire()
     print(f'Starting receiveVideo. Active connections: {activeConnections}')
     activeConnections += 1
+    temp = activeConnections
     onLoad = True
     jobNo = random.randint(1,1000)
     jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start", '-']
     print(f"# of active connections: {activeConnections}")
     lock.release()
+
+    while(temp > 3):
+        time.sleep(5)
+        lock.acquire()
+        temp = activeConnections
+        lock.release()
+
     try:
         print(f"{address} is uploading a video...")
 
