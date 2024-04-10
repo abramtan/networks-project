@@ -132,13 +132,16 @@ def queryTimer():
 
 def ackSend(server, obj):
     tempClient = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tempClient.settimeout(3)
     try:
         tempClient.connect((server['ip'], server['port']))
         send(tempClient, obj)
         print(f'[ackSend]Sent {obj['requestType']} to {server['port']}')
         serverReceive(tempClient, True, False)
-    finally:
+    except TimeoutError:
         pass
+    finally:
+        tempClient.close()
 
 def testQueries(requester):
     time.sleep(1)
@@ -258,7 +261,7 @@ def least_connections():
     l = len(servers)
     
     # Obtain connections list
-    connections = {x:servers[x]["active_connections"] for x in servers}
+    connections = {x:servers[x]["activeConnections"] for x in servers}
     lowest_connections_server = None
 
     # Find server with lowest active connections, check if available, use next lowest if not and so on...

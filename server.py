@@ -218,7 +218,7 @@ def decisionTree(client, input):
             print(f"Replying perfQuery with result: {pkgWatt+ramWatt}, connections= {activeConnections}")
             send(client, reply)
     except Exception as e:
-        send(client, reply)
+        #send(client, reply)
         print(f'Thread encountered problem: {e}')
     finally:
         pass
@@ -246,7 +246,7 @@ def perfCommandTEST():
     if count < 4:
         calc = wattMultiplier * 0.3 * count + offset
         if calc < 0:
-            return 0
+            return 0, 0
         else:
             return wattMultiplier * 0.3 * count + offset, 0
     else:
