@@ -155,3 +155,4 @@ cython_debug/
 credentials
 config.py
 /trials
+/calculations/files
