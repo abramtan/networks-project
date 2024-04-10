@@ -1,3 +1,4 @@
+import math
 import os
 import random
 import socket
@@ -5,7 +6,7 @@ import pickle
 import sys
 import threading
 import time
-import config
+import config, serverConfig
 import subprocess
 import pandas as pd
 import tqdm
@@ -15,12 +16,15 @@ import datetime
 import boto3
 from pprint import pprint
 
-wattMultiplier = 140
-hostname = 'server_' + str(random.randint(0, 100))
+
+maxConcurrent = 4
+
+hostname = serverConfig.Name
+wattMultiplier = serverConfig.TDP
 serverIP = config.hostIP
+lbIP = config.lbIP
 #serverPort = 60523
 serverPort = random.randint(50000, 60000)
-lbIP = config.lbIP
 lbPort = 60325
 headersize = 10
 connected = False #Do not set to True
@@ -32,6 +36,7 @@ SERVER_PORT = 5001
 BUFFER_SIZE = 4096
 SEPARATOR = "<SEPARATOR>"
 activeConnections = 0
+runningConnections = 0
 jobCount = 0
 lock = threading.Lock()
 
@@ -71,22 +76,29 @@ def receive(client, addr):
         pass
 
 def receiveVideo(client_upload_video, address):
-    global activeConnections, jobCount
+    global activeConnections, runningConnections, jobCount
     state = "Success"
+
+    #Increments global variables 
     lock.acquire()
-    print(f'Starting receiveVideo. Active connections: {activeConnections}')
     activeConnections += 1
-    temp = activeConnections
+    temp = runningConnections
     onLoad = True
+    print(f'Starting receiveVideo. Running connections: {runningConnections}, Total connections: {activeConnections}')
     jobNo = random.randint(1,1000)
     jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "Start", '-']
     print(f"# of active connections: {activeConnections}")
     lock.release()
 
-    while(temp > 3):
+    #Blocks if there are too many requests, will wait for some threads to finish
+    while(temp > maxConcurrent):
         time.sleep(5)
         lock.acquire()
-        temp = activeConnections
+        temp = runningConnections
+        if temp <= maxConcurrent: #Unblock if other threads finish processing
+            runningConnections += 1
+            lock.release()
+            break
         lock.release()
 
     try:
@@ -142,10 +154,13 @@ def receiveVideo(client_upload_video, address):
         lock.acquire()
         if activeConnections > 0:
             activeConnections -= 1
+        if runningConnections > 0:
+            runningConnections -= 1
         jobStore.loc[len(jobStore.index)] = [jobNo, time.ctime(time.time()), "End", state]
         jobCount +=1
         onLoad = False
         print(f"Request Complete with status {state}")
+        print(f"# of running connections: {runningConnections},")
         print(f"# of active connections: {activeConnections}")
         lock.release()
 
@@ -248,17 +263,16 @@ def perfCommand():
     
 def perfCommandTEST():
     lock.acquire()
-    count = activeConnections
+    count = runningConnections
     lock.release()
     offset = random.randint(-20, 20)
-    if count < 4:
-        calc = wattMultiplier * 0.3 * count + offset
-        if calc < 0:
-            return 0, 0
-        else:
-            return wattMultiplier * 0.3 * count + offset, 0
+    if count > 0 :
+        # eVal = count/1 - 4
+        # result = wattMultiplier * math.pow(math.e, eVal)/ (1 + math.pow(math.e, eVal)) + offset
+        result = wattMultiplier * math.log(count, maxConcurrent) + offset
+        return abs(result), 0
     else:
-        return wattMultiplier
+        return offset, 0
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = time.ctime(time.time())
 perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])

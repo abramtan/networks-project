@@ -9,7 +9,7 @@ import config
 import tqdm
 from pprint import pprint
 
-queries = 3 #Number of queries per iteration
+queries = 2 #Number of queries per iteration
 queryGap = 30 #Rest duration between each iteration
 fullDuration = 20 #Trial length in minutes
 
