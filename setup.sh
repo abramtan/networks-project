@@ -26,3 +26,4 @@ pip3 install python-ffmpeg-video-streaming
 pip3 install pandas
 pip3 install tqdm
 pip3 install boto3
+cd $home

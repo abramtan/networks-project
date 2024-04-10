@@ -91,15 +91,18 @@ def receiveVideo(client_upload_video, address):
     lock.release()
 
     #Blocks if there are too many requests, will wait for some threads to finish
-    while(temp > maxConcurrent):
-        time.sleep(5)
-        lock.acquire()
-        temp = runningConnections
-        if temp <= maxConcurrent: #Unblock if other threads finish processing
-            runningConnections += 1
+    if temp < maxConcurrent:
+        runningConnections += 1
+    else:
+        while(temp > maxConcurrent):
+            time.sleep(5)
+            lock.acquire()
+            temp = runningConnections
+            if temp <= maxConcurrent: #Unblock if other threads finish processing
+                runningConnections += 1
+                lock.release()
+                break
             lock.release()
-            break
-        lock.release()
 
     try:
         print(f"{address} is uploading a video...")
@@ -226,6 +229,7 @@ def decisionTree(client, input):
         if input['requestType'] == 'perfQuery':
             print("Received perfQuery")
             pkgWatt, ramWatt = perfCommandTEST()
+            print("Calculated perf")
             #pkgWatt, ramWatt = 0,0 
             lock.acquire()
             wattSum = "" + str(pkgWatt + ramWatt)
@@ -262,17 +266,22 @@ def perfCommand():
         return 0.0,0.0
     
 def perfCommandTEST():
+    global wattMultiplier, runningConnections
     lock.acquire()
     count = runningConnections
+    watt = wattMultiplier
+    print(f"watt multiplier is {wattMultiplier} and connections {count}")
     lock.release()
     offset = random.randint(-20, 20)
     if count > 0 :
         # eVal = count/1 - 4
         # result = wattMultiplier * math.pow(math.e, eVal)/ (1 + math.pow(math.e, eVal)) + offset
-        result = wattMultiplier * math.log(count, maxConcurrent) + offset
-        return abs(result), 0
+        result = abs(round(wattMultiplier * math.log(count, maxConcurrent) + offset, 2))
+        print(f"PerfCommand with result {result}")
+        return result, 0
     else:
-        return offset, 0
+        print(f"PerfCommand with default offset {offset}")
+        return abs(offset), 0
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = time.ctime(time.time())
 perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])
@@ -298,14 +307,6 @@ while connected == False:
 print("Connected to LB\n=================================")
 
 lbIP, lbPort = client.getpeername()
-
-# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# server.bind((serverIP, serverPort))
-# server.listen()
-# server.setblocking(False)
-# server.settimeout(1)
-# print(f"Created listening socket {serverIP}:{serverPort}")
-# #Listen to request
 
 # Opening port for video upload
 s = socket.socket()
