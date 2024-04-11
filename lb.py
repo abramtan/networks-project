@@ -288,7 +288,7 @@ def improved_connections():
     l = len(servers)
 
     # Obtain connections list
-    connections = {x:servers[x]["active_connections"] for x in servers}
+    connections = {x:servers[x]["activeConnections"] for x in servers}
 
     # Find list of connections with lowest active connections
     lowest_value = min(connections.values())
