@@ -40,9 +40,6 @@ runningConnections = 0
 jobCount = 0
 lock = threading.Lock()
 
-# def receiveVideoHandler(s):
-#     client_upload_video, address = s.accept()
-#     receiveVideo(client_upload_video, address)
 
 def save_string_to_file(text, filename):
     file = open(filename, 'w')
@@ -228,7 +225,7 @@ def decisionTree(client, input):
     try:
         if input['requestType'] == 'perfQuery':
             print("Received perfQuery")
-            pkgWatt, ramWatt = perfCommandTEST()
+            pkgWatt, ramWatt = perfCommand()
             print("Calculated perf")
             #pkgWatt, ramWatt = 0,0 
             lock.acquire()
@@ -252,36 +249,19 @@ def decisionTree(client, input):
 
 def perfCommand():
     turboInterval = 1
-    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", turboInterval, "--show", "PkgWatt,RAMWatt", "--num_iterations", "1"]
+    turbostat_command = ["sudo", "turbostat", "--Summary", "--quiet", "--interval", turboInterval, "--show", "C1%", "--num_iterations", "1"]
     output = subprocess.run(turbostat_command, capture_output=True, text=True)
     time.sleep(turboInterval + 1)
     turbostat_output = output.stdout
     try:
         output = turbostat_output.split('\n')[1].split('\t')
         print("Success perfCommand")
-        perfStore.loc[len(perfStore.index)] = [time.ctime(time.time()), onLoad, output[0], output[1]]
-        return float(output[0]), float(output[1]) #PkgWatt, RAMWatt
+        perfStore.loc[len(perfStore.index)] = [time.ctime(time.time()), onLoad, output[0], 0]
+        return float(output[0]) * wattMultiplier, 0 #PkgWatt, RAMWatt
     except:
         print("Failed perfCommand")
         return 0.0,0.0
     
-def perfCommandTEST():
-    global wattMultiplier, runningConnections
-    lock.acquire()
-    count = runningConnections
-    watt = wattMultiplier
-    print(f"watt multiplier is {wattMultiplier} and connections {count}")
-    lock.release()
-    offset = random.randint(-20, 20)
-    if count > 0 :
-        # eVal = count/1 - 4
-        # result = wattMultiplier * math.pow(math.e, eVal)/ (1 + math.pow(math.e, eVal)) + offset
-        result = abs(round(wattMultiplier * math.log(count, maxConcurrent) + offset, 2))
-        print(f"PerfCommand with result {result}")
-        return result, 0
-    else:
-        print(f"PerfCommand with default offset {offset}")
-        return abs(offset), 0
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 runInstance = time.ctime(time.time())
 perfStore = pd.DataFrame(columns = ['time', 'onLoad', 'pkgWatt', 'ramWatt'])
