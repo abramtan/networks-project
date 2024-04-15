@@ -16,7 +16,6 @@ fullDuration = 20 #Trial length in minutes
 
 filename = "BigBuckBunny-short.mp4"
 no_of_uploads = 3  # How many times to upload the video
-
 clientName = 'clientTest'
 serverIP = config.hostIP
 lbIP = config.lbIP
@@ -44,19 +43,13 @@ def receive(client):
                     data += client.recv(remMsgLen)
         input = pickle.loads(data)
         # print(f'Received {input}')
-
         return input
-
-        # if input['requestType'] == 'getServer':
-        #     return input  # server['ip'], server['port']
-        # elif input['hostType'] == 'server':
-        #     client.close()
-        #     sys.exit(130)
     except Exception as e:
         print(f"Problem reading message: {e}")
     finally:
         pass
 
+#General Method for sending over socket
 def send(client, obj):
     msg = pickle.dumps(obj)
     msg = bytes(f'{len(msg) :< {headersize}}', 'utf-8') + msg

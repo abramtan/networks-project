@@ -10,4 +10,6 @@ Currently tested for AWS Linux on EC2 instance
 3. Add your AWS CLI credentials inside the 'credentials' file
 4. In 'config.sh', modify the 'lb_instanceID' variable to contain the AWS instance ID of the load balancer EC2 instance.
 5. Run 'sudo bash config.sh'
-6. Depending on whether or not the instance is meant to be a load balancer or a server, run 'python lb.py --mode [rr/connections/power]' or 'python3.12 server.py'
+- Ensure that config.py has the correct IP address for loadbalancer
+6. Depending on whether or not the instance is meant to be a load balancer or a server, run 'python3.12 lb.py --mode [rr/connections/power/ic]' or 'python3.12 server.py'
+7. With both a running instance of a server and a load balancer, run the client application either on an EC2 instance of locally (Ensure config.py has load balancer IP)
