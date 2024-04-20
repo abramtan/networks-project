@@ -1,6 +1,6 @@
 #!/bin/bash
 
-lb_instanceID=i-0feb6b2b313946ec6
+lb_instanceID=
 
 HOME=/home/ec2-user
 cp credentials /home/ec2-user/.aws
